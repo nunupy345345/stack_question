@@ -1,0 +1,9 @@
+node_modules/
+dist/
+# 実トラック名を含む元データと対応表は絶対に公開しない
+json/
+private/
+out/
+responses/
+*.local
+.env.local

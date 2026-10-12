@@ -1,0 +1,22 @@
+{
+  "name": "prt-survey",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "prepare-survey": "node scripts/prepare-survey.mjs",
+    "decode": "node scripts/decode-responses.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.16",
+    "katex": "^0.19.0",
+    "vue": "^3.5.43"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "vite": "^5.4.21"
+  }
+}

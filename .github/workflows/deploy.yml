@@ -1,0 +1,55 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # 公開データが匿名化済みであることを毎回確認（PRTのキーは PRT-A, PRT-B, ... のみ許可）
+      - name: Check anonymization
+        run: |
+          node -e '
+            const s = require("./public/survey.json");
+            const bad = s.problems.flatMap((p) => Object.keys(p.prts).filter((k) => !/^PRT-[A-Z]$/.test(k)).map((k) => `${p.key}:${k}`));
+            if (bad.length) { console.error("::error::匿名化されていないPRTキー: " + bad.join(", ")); process.exit(1); }
+            if (/"(traditional|norag|kc|human)"/.test(JSON.stringify(s))) { console.error("::error::public/survey.json に実トラック名らしき文字列が含まれています"); process.exit(1); }
+          '
+          if [ -d private ] || [ -d json ]; then
+            echo "::error::private/ または json/ がリポジトリに含まれています"; exit 1
+          fi
+      - run: npm run build
+        env:
+          VITE_SUBMIT_ENDPOINT: ${{ vars.VITE_SUBMIT_ENDPOINT }}
+          VITE_SUBMIT_TOKEN: ${{ vars.VITE_SUBMIT_TOKEN }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
