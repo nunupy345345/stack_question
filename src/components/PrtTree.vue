@@ -43,7 +43,7 @@ const layout = computed(() => {
     x: CX,
     y: y(i),
     isRoot: i === 0,
-    hasFeedback: !!plainText(n.true.feedback),
+    hasFeedback: !!(plainText(n.true.feedback) || plainText(n.false.feedback)),
   }))
   const edges = []
   const leaves = []

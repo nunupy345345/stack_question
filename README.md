@@ -19,6 +19,8 @@ json/survey_dataset_*.json   （実トラック名入り・非公開・gitignore
 
 ## セットアップ
 
+Node.js 20.19 以上（`.nvmrc` は 22。`nvm use` で切り替え）が必要です。
+
 ```bash
 npm install
 # 1) 匿名化データと割り当てを生成（評価者6名・各問題を2名で重複評価・8問ずつのブロック）
@@ -27,10 +29,21 @@ npm run prepare-survey -- --raters 6 --overlap 2 --block 8
 npm run dev
 ```
 
+**全員が同じ16問を評価する場合**（人間版を含む4トラック）:
+
+```bash
+npm run prepare-survey -- --input json/survey_16.json --require human \
+  --raters r01-ca8870,r02-c5cb26,r03-c0bfb8,r04-88edcc,r05-78f691,r06-3daf54 \
+  --overlap 6 --block 16
+```
+
+`--overlap` を評価者数と同じにし、`--block` を問題数以上にすると、全員が全問を担当します。
+
 - `--input` 省略時は `json/` 内の最新の `survey_dataset*.json` を使います。
 - `--raters 6` はランダムな評価者コード（例 `r01-3fa2c1`）を生成し、配布用URL `<サイトURL>/?e=<コード>` を表示します。名前で指定するなら `--raters R01,R02,...`。
 - `--raters` を省略すると割り当てなし（任意のコードで全問を担当）になります。
-- **実行するたびに対応表が新しく作り直されます**。公開後に再実行すると mapping_id が変わり、それまでの回答は旧 mapping_id の対応表で復号されます（両方の `private/track_mapping_*.json` を残しておけば問題なし）。
+- コード修正後に**同じ対応表のまま**作り直したいときは `--reuse-mapping <mapping_id>` を付けます（`private/` の対応表を使い、入力JSONが同一でなければエラー）。
+- **付けずに実行するたびに対応表が新しく作り直されます**（`--help` 以外の実行はすべて前処理が走ります）。公開後に再実行すると mapping_id が変わり、それまでの回答は旧 mapping_id の対応表で復号されます（両方の `private/track_mapping_*.json` を残しておけば問題なし）。
 
 > ⚠️ `private/track_mapping_*.json` がないと回答を実トラック名に戻せません。必ずバックアップを取ってください（リポジトリにはコミットされません）。
 
@@ -80,12 +93,23 @@ SELECT feedbackvariables FROM mdl_qtype_stack_prts    WHERE questionid = :qid AN
 
 定義の式は [src/lib/maxima2tex.js](src/lib/maxima2tex.js) で LaTeX に変換し、KaTeX で数式として表示します（約300行・依存なし）。
 
-- 対応: 四則・`^`・`sqrt`・`abs`・`exp`・`log`・三角/逆三角/双曲線関数・`diff`・`integrate`・`limit`・`subst`・`freeof`・`is`・`and/or/not`・関係演算子・リスト・`%pi` `inf` など。それ以外の関数は `\operatorname{名前}(…)` で表示します。
+- 対応: 四則・`^`・`sqrt`・`abs`・`exp`・`log`・三角/逆三角/双曲線関数・`diff`・`integrate`/`int`・`limit`・`subst`（`subst([C=0,c=0], e)` の同時置換を含む）・`freeof`・`is`・`equal`・`and/or/not`・関係演算子（`#` は ≠）・リスト・`%pi` `inf` など。
+- STACK 特有の関数は日本語の演算名で表示します: `ratsimp`/`radcan`/`trigsimp` → 整理、`expand` → 展開、`factor` → 因数分解、`num` → 分子、`denom` → 分母、`hipow(e,x)` → deg_x(e)、`ratcoef(e,x,n)` → 係数_{xⁿ}(e)。
+- 上記以外の関数は `\operatorname{名前}(…)` で表示します。
+- 問題変数・feedbackvariables は、`;` / `$` に加えて**改行も文の区切り**として解析します（STACK と同じ。人間が書いた PRT は `;` を付けないことが多いため）。
 - 述語関数（`wa1_pred(ex) := is(...)`）は `⇔` で表示します。
 - 構文解析できない式（`if` / `block` / `for` など）は、原文を等幅で表示します。「Maxima 原文」を開けば、変換前の式をいつでも確認できます。
 - 既存ライブラリは調べましたが、Maxima 構文を LaTeX に直す JS ライブラリは見つかりませんでした（STACK MP LITE は構文解析のみで LaTeX 出力なし、TeX2Max は逆方向、Maxima 本体の `tex()` は CAS が必要）。
 
 
+
+## フィードバックの位置（true側 / false側）
+
+トラックによって、診断フィードバックを置く分岐が違います（traditional / norag / 人間版は true 側、chain 型の KC 版は false 側）。
+設問 C2〜C4 は「そのノードにあるフィードバック」を対象にし、画面には `（true側）` / `（false側）` と表示します。
+両方の分岐に無い場合のみ「フィードバックなし」になります。
+
+また、判定式が条件式（`is(...)` など）で TAns が `true` / `false` のノードは、「条件が成り立つか / 成り立たないか」という文で説明します。
 
 ## 匿名化の設計
 
@@ -93,6 +117,11 @@ SELECT feedbackvariables FROM mdl_qtype_stack_prts    WHERE questionid = :qid AN
 - 公開ファイルから `question_id`（トラックごとに番号帯が違う）と `preview_url` も削除しています。
 - 対応は問題ごとに crypto 乱数で決めます。トラックの組み合わせごとに全順列（3つなら6通り、4つなら24通り）を均等回数ずつ割り当てるので、各トラックが各ラベル位置にほぼ同数ずつ現れます。
 - 回答には `mapping_id` と `PRT-A/B/C` のみが記録され、復号は研究者のローカルでのみ行います。
+- **書き方の癖による推測**: 作成方法は名前を隠しても、データの癖で見分けられることがあります。公開前に次を確認してください。
+  - scoremode（`=` / `+` / `-`）の使い方、`description` の有無、true/false どちらにフィードバックがあるか
+  - 使っているアンサーテスト（`Int` 等）、`feedbackvariables` の有無
+  - 人間版だけに偏る特徴があれば、D3（人間か AI かの推測）の結果は「癖で当てられた分」を含みます。可能なら作成側で揃え、揃えられない分は論文の限界として記載してください。
+  - HTML の属性（`<p dir="ltr" style="…">` など）は DOMPurify が除去するため、画面には出ません。
 - GitHub Actions は、`public/survey.json` の PRT のキーが `PRT-A`, `PRT-B`, … だけであること、実トラック名が含まれていないことを毎回チェックします。
 
 ## 回答の保存先（推奨構成）

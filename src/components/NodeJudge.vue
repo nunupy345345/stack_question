@@ -36,7 +36,7 @@ const subject = computed(() => {
 })
 
 const target = computed(() => {
-  if (subject.value.kind === 'cond' && ['true', 'false'].includes(tans.value)) return { kind: 'bool', value: tans.value === 'true' }
+  if (subject.value.kind !== 'student' && ['true', 'false'].includes(tans.value)) return { kind: 'bool', value: tans.value === 'true' }
   if (isBareId(tans.value)) {
     const d = defOf(tans.value)
     return { kind: 'var', role: roleOf(tans.value), name: tans.value, tex: d && !d.fn ? defToTex(d) : null }
@@ -51,6 +51,8 @@ const extra = computed(() =>
     .filter((d) => !(d.depth === 0 && !d.fn && inline.value.has(d.name))))
 
 const hint = computed(() => {
+  if (subject.value.kind === 'expr' && target.value.kind === 'bool')
+    return `この式が${target.value.value ? '成り立つ' : '成り立たない'}とき true の分岐に進みます（学生の解答を加工して、条件を満たすかを調べています）`
   if (subject.value.kind === 'cond') return '条件の中身は右の「関連する定義」のとおりです。満たしたとき、この誤りと判定します'
   return test.value?.hint ?? ''
 })
@@ -62,9 +64,12 @@ const missingData = computed(() => !props.ctx.hasData && target.value.kind === '
   <div class="judge" :class="{ compact, two: extra.length > 0 }">
     <div class="judge-main">
       <p v-if="test" class="judge-sentence">
-        <span class="chip student">{{ subject.kind === 'student' ? '学生の解答' : subject.kind === 'cond' ? '学生の解答' : '学生の解答を加工した式' }}</span>
+        <span class="chip student">{{ subject.kind === 'student' ? '学生の解答' : subject.kind === 'cond' ? '学生の解答' : target.kind === 'bool' ? '条件' : '学生の解答を加工した式' }}</span>
         <template v-if="subject.kind === 'expr'"><MathTex :tex="subject.tex" :fallback="sans" /></template>
-        <template v-if="subject.kind === 'cond' && target.kind === 'bool'">
+        <template v-if="subject.kind === 'expr' && target.kind === 'bool'">
+          {{ target.value ? 'が成り立つか' : 'が成り立たないか' }}
+        </template>
+        <template v-else-if="subject.kind === 'cond' && target.kind === 'bool'">
           が <span class="chip target"><b>{{ subject.role ? `${subject.role}の判定条件` : `条件 ${subject.name}` }}</b></span>{{ target.value ? 'を満たすか' : 'を満たさないか' }}
         </template>
         <template v-else>

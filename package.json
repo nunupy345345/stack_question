@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "engines": { "node": ">=20.19" },
   "scripts": {
     "prepare-survey": "node scripts/prepare-survey.mjs",
     "decode": "node scripts/decode-responses.mjs",
@@ -16,7 +17,7 @@
     "vue": "^3.5.43"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.4",
-    "vite": "^5.4.21"
+    "@vitejs/plugin-vue": "^6.0.10",
+    "vite": "^8.3.5"
   }
 }

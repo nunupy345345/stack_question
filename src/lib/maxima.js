@@ -5,6 +5,9 @@
  *   wa1_pred(x) := ...; → { name: 'wa1_pred', params: 'x', expr: '...' }
  */
 
+const CONTINUES_AFTER = /(?:[-+*/^,:=<>]|\b(?:and|or|not))\s*$/
+const CONTINUES_BEFORE = /^\s*(?:[*/^,=<>]|and\b|or\b)/
+
 /** コメントを除去し、括弧・文字列の外にある ; / $ で文を分割 */
 function splitStatements(code) {
   const src = String(code ?? '').replace(/\/\*[\s\S]*?\*\//g, ' ')
@@ -25,6 +28,12 @@ function splitStatements(code) {
     else if (')]}'.includes(c)) depth = Math.max(0, depth - 1)
     if ((c === ';' || c === '$') && depth === 0) {
       if (buf.trim()) out.push(buf.trim())
+      buf = ''
+      continue
+    }
+    // STACK は改行も文の区切りとして扱う（演算子で終わる行・演算子で始まる次行は継続とみなす）
+    if (c === '\n' && depth === 0 && buf.trim() && !CONTINUES_AFTER.test(buf) && !CONTINUES_BEFORE.test(src.slice(i + 1))) {
+      out.push(buf.trim())
       buf = ''
       continue
     }

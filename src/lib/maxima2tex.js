@@ -163,8 +163,8 @@ function prec(n) {
       if (n.name === 'is' && n.args.length === 1) return prec(n.args[0])
       if (n.name === 'sqrt' || n.name === 'abs') return P.atom
       if (n.name === 'exp') return P.pow
-      if (n.name === 'freeof') return P.rel
-      if (['limit', 'integrate'].includes(n.name)) return P.add
+      if (n.name === 'freeof' || (n.name === 'equal' && n.args.length === 2)) return P.rel
+      if (['limit', 'integrate', 'int'].includes(n.name) && n.args.length >= 2) return P.add
       return P.call
     }
     default: return P.atom
@@ -189,6 +189,22 @@ function callTex(n) {
       if (a.length === 2) return `\\frac{d}{d${tex(a[1])}}${wrap(a[0], P.call)}`
       if (a.length === 3) return `\\frac{d^{${tex(a[2])}}}{d${tex(a[1])}^{${tex(a[2])}}}${wrap(a[0], P.call)}`
       break
+    // 整理・展開・分子・分母・次数・係数は、英語名のままでは読みにくいので日本語の演算名で表示する
+    case 'ratsimp': case 'radcan': case 'fullratsimp': case 'trigsimp': case 'factor': case 'expand': case 'num': case 'denom': {
+      const jp = { ratsimp: '整理', fullratsimp: '整理', radcan: '整理', trigsimp: '整理', factor: '因数分解', expand: '展開', num: '分子', denom: '分母' }[name]
+      if (a.length === 1) return `${text(jp)}\\left(${tex(a[0])}\\right)`
+      break
+    }
+    case 'hipow':
+      if (a.length === 2) return `\\deg_{${tex(a[1])}}\\left(${tex(a[0])}\\right)`
+      break
+    case 'ratcoef': case 'coeff':
+      if (a.length === 2 || a.length === 3) {
+        const pw = a.length === 3 ? `${tex(a[1])}^{${tex(a[2])}}` : tex(a[1])
+        return `${text('係数')}_{${pw}}\\left(${tex(a[0])}\\right)`
+      }
+      break
+    case 'int': // STACK の名詞形の積分（integrate と同じ）
     case 'integrate':
       if (a.length === 2) return `\\int ${wrap(a[0], P.mul)}\\,d${tex(a[1])}`
       if (a.length === 4) return `\\int_{${tex(a[2])}}^{${tex(a[3])}} ${wrap(a[0], P.mul)}\\,d${tex(a[1])}`
@@ -199,7 +215,13 @@ function callTex(n) {
         return `\\lim_{${tex(a[1])} \\to ${tex(a[2])}${dir}} ${wrap(a[0], P.mul)}`
       }
       break
+    case 'equal':
+      if (a.length === 2) return `${tex(a[0])} = ${tex(a[1])}`
+      break
     case 'subst':
+      // subst([C=0, c=0], e): 複数の置き換えを同時に行う
+      if (a.length === 2 && a[0].type === 'list' && a[0].items.length && a[0].items.every((i) => strip(i).type === 'rel' && strip(i).op === '='))
+        return `\\left.${tex(a[1])}\\right|_{${a[0].items.map((i) => tex(strip(i))).join(',\\ ')}}`
       if (a.length === 2 && a[0].type === 'rel' && a[0].op === '=') return `\\left.${tex(a[1])}\\right|_{${tex(a[0])}}`
       if (a.length === 3) return `\\left.${tex(a[2])}\\right|_{${tex(a[1])}=${tex(a[0])}}`
       break

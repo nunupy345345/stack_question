@@ -15,6 +15,8 @@
  *                                   [--overlap 2] [--block 8]
  *                                   [--tracks traditional,norag,kc,human]  使うトラックを限定（省略時は全検出）
  *                                   [--require human]  このトラックが無い問題は除外（省略時は2トラック以上あれば採用）
+ *                                   [--reuse-mapping <mapping_id>]  private/ の既存の対応表をそのまま使って作り直す
+ *                                       （コード修正後に同じ mapping_id・同じラベル割り当てで再生成したいとき。入力JSONが同一であることを確認する）
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -122,11 +124,23 @@ function buildAssignments(keys, raters, overlap, blockSize) {
 }
 
 const args = parseArgs(process.argv.slice(2))
+if (args.help || args.h) {
+  console.log('usage: node scripts/prepare-survey.mjs [--input f] [--raters ..] [--overlap n] [--block n] [--tracks a,b] [--require t] [--reuse-mapping <mapping_id>]')
+  process.exit(0)
+}
 const inputPath = args.input ? path.resolve(args.input) : newestDataset()
 const raw = fs.readFileSync(inputPath)
 const src = JSON.parse(raw.toString('utf8'))
 const sourceSha = crypto.createHash('sha256').update(raw).digest('hex')
-const mappingId = `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomBytes(4).toString('hex')}`
+// 既存の対応表を再利用する場合は、入力JSONが対応表の作成時と同一であることを確かめる
+let reuse = null
+if (args['reuse-mapping']) {
+  const f = path.join(ROOT, 'private', `track_mapping_${args['reuse-mapping']}.json`)
+  if (!fs.existsSync(f)) throw new Error(`対応表が見つかりません: ${path.relative(ROOT, f)}`)
+  reuse = JSON.parse(fs.readFileSync(f, 'utf8'))
+  if (reuse.source_sha256 !== sourceSha) throw new Error('入力JSONが、対応表を作ったときのJSONと異なります（--reuse-mapping は使えません）')
+}
+const mappingId = reuse?.mapping_id ?? `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${crypto.randomBytes(4).toString('hex')}`
 
 const hasPrt = (tr) => Array.isArray(tr?.prt?.nodes) && tr.prt.nodes.length > 0
 const listArg = (v) => (typeof v === 'string' ? v.split(',').map((x) => x.trim()).filter(Boolean) : null)
@@ -170,7 +184,10 @@ function questionText(item) {
 const mapping = {}
 const problems = []
 for (const { item, key, present } of candidates) {
-  const order = pools[present.join(',')].perms.pop().map((i) => present[i])
+  const order = reuse
+    ? Object.keys(reuse.mapping[key] ?? {}).sort().map((l) => reuse.mapping[key][l])
+    : pools[present.join(',')].perms.pop().map((i) => present[i])
+  if (reuse && order.length !== present.length) throw new Error(`対応表と入力JSONのトラック構成が一致しません: ${key}`)
   const labels = order.map((_, i) => labelAt(i))
   const labelToTrack = Object.fromEntries(labels.map((l, i) => [l, order[i]]))
   mapping[key] = labelToTrack
@@ -206,7 +223,7 @@ fs.writeFileSync(
   path.join(publicDir, 'survey.json'),
   JSON.stringify({ mapping_id: mappingId, labels: ALL_LABELS, problems }),
 )
-fs.writeFileSync(
+if (!reuse) fs.writeFileSync(
   path.join(privateDir, `track_mapping_${mappingId}.json`),
   JSON.stringify({
     mapping_id: mappingId,

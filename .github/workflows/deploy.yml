@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       # 公開データが匿名化済みであることを毎回確認（PRTのキーは PRT-A, PRT-B, ... のみ許可）

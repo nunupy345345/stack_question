@@ -19,7 +19,12 @@ const emit = defineEmits(['change'])
 
 const fmtScore = (b) => `${b.scoremode}${b.score}`
 const nextLabel = (b) => (b.nextnode === '-1' ? '終了' : `ノード${b.nextnode}へ`)
-const trueFbEmpty = computed(() => !plainText(props.node.true.feedback))
+// フィードバックがどちらの分岐にあるか（traditional/norag型は true 側、chain型は false 側にあることが多い）
+const fbSide = computed(() => {
+  const t = !!plainText(props.node.true.feedback)
+  const f = !!plainText(props.node.false.feedback)
+  return t && f ? 'true側・false側' : t ? 'true側' : f ? 'false側' : ''
+})
 const title = computed(() => nodeTitle(props.node))
 const missing = computed(() => (props.answer ? nodeMissing(props.answer) : []))
 
@@ -54,7 +59,7 @@ const C4_OPTIONS = [
         <div class="branch-head">
           <b>true</b> スコア <code>{{ fmtScore(node.true) }}</code> ・ {{ nextLabel(node.true) }} ・ <code class="note">{{ node.true.answernote }}</code>
         </div>
-        <RichHtml v-if="!trueFbEmpty" :html="node.true.feedback" class="feedback" />
+        <RichHtml v-if="plainText(node.true.feedback)" :html="node.true.feedback" class="feedback" />
         <div v-else class="feedback empty">（フィードバックなし）</div>
       </div>
       <div class="branch false">
@@ -92,13 +97,13 @@ const C4_OPTIONS = [
       </div>
 
       <div class="q">
-        <div class="q-text"><b>C2.</b> このフィードバック文（true側）は数学的に正しいですか？</div>
+        <div class="q-text"><b>C2.</b> このノードのフィードバック文{{ fbSide ? `（${fbSide}）` : '' }}は数学的に正しいですか？</div>
         <ChoiceGroup
           v-model="answer.c2"
           :name="`${idPrefix}-${node.name}-c2`"
           :options="[{ value: 'yes', label: 'はい' }, { value: 'no', label: 'いいえ' }, { value: 'none', label: 'フィードバックなし' }]"
         />
-        <div v-if="trueFbEmpty" class="q-hint">このノードのtrue側フィードバックは空です。</div>
+        <div v-if="!fbSide" class="q-hint">このノードには、true側・false側ともフィードバックがありません。</div>
       </div>
       </div>
 
