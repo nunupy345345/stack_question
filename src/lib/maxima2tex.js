@@ -144,6 +144,14 @@ function symTex(v) {
   return `\\mathrm{${esc(v)}}`
 }
 
+// 「〜を含む／含まない」だけでできた条件は、記号（∧ ∨ ¬）ではなく言葉（かつ・または）で表す
+const isWords = (n) => {
+  n = strip(n)
+  if (n.type === 'call') return n.name === 'freeof' && n.args.length === 2
+  if (n.type === 'not') { const x = strip(n.x); const i = x.type === 'call' && x.name === 'is' ? strip(x.args[0]) : x; return isWords(i) }
+  if (n.type === 'and' || n.type === 'or') return isWords(n.l) && isWords(n.r)
+  return false
+}
 const strip = (n) => (n.type === 'paren' ? strip(n.x) : n)
 const isAtomLike = (n) => ['num', 'str'].includes(n.type) || (n.type === 'sym' && n.v !== 'minf') || (n.type === 'call' && n.name === 'abs')
 
@@ -189,9 +197,9 @@ function callTex(n) {
       if (a.length === 2) return `\\frac{d}{d${tex(a[1])}}${wrap(a[0], P.call)}`
       if (a.length === 3) return `\\frac{d^{${tex(a[2])}}}{d${tex(a[1])}^{${tex(a[2])}}}${wrap(a[0], P.call)}`
       break
-    // 整理・展開・分子・分母・次数・係数は、英語名のままでは読みにくいので日本語の演算名で表示する
+    // 簡約・展開・分子・分母・次数・係数は、英語名のままでは読みにくいので日本語の演算名で表示する
     case 'ratsimp': case 'radcan': case 'fullratsimp': case 'trigsimp': case 'factor': case 'expand': case 'num': case 'denom': {
-      const jp = { ratsimp: '整理', fullratsimp: '整理', radcan: '整理', trigsimp: '整理', factor: '因数分解', expand: '展開', num: '分子', denom: '分母' }[name]
+      const jp = { ratsimp: '簡約', fullratsimp: '簡約', radcan: '根号の簡約', trigsimp: '三角関数の簡約', factor: '因数分解', expand: '展開', num: '分子', denom: '分母' }[name]
       if (a.length === 1) return `${text(jp)}\\left(${tex(a[0])}\\right)`
       break
     }
@@ -286,11 +294,14 @@ function tex(n) {
       const sym = { '=': '=', '#': '\\ne', '<': '<', '>': '>', '<=': '\\le', '>=': '\\ge' }[n.op]
       return `${wrap(n.l, P.add)} ${sym} ${wrap(n.r, P.add)}`
     }
-    case 'and': return `${wrap(n.l, P.and)} \\land ${wrap(n.r, P.and)}`
-    case 'or': return `${wrap(n.l, P.or)} \\lor ${wrap(n.r, P.and)}`
+    case 'and': return `${wrap(n.l, P.and)} ${isWords(n) ? text('　かつ　') : '\\land'} ${wrap(n.r, P.and)}`
+    case 'or': return `${wrap(n.l, P.or)} ${isWords(n) ? text('　または　') : '\\lor'} ${wrap(n.r, P.and)}`
     case 'not': {
       const x = strip(n.x)
       const inner = x.type === 'call' && x.name === 'is' ? strip(x.args[0]) : x
+      // 「〜を含まない」の否定は「〜を含む」と読む
+      if (inner.type === 'call' && inner.name === 'freeof' && inner.args.length === 2)
+        return `${tex(strip(inner.args[1]))} ${text(' は ')}${tex(strip(inner.args[0]))}${text(' を含む')}`
       return `\\lnot ${isAtomLike(inner) ? tex(inner) : `\\left(${tex(inner)}\\right)`}`
     }
     case 'call': return callTex(n)
@@ -305,10 +316,137 @@ const isPredicate = (n) => {
 
 // ---------- 公開API ----------
 /** 式1つを LaTeX に。失敗したら null */
-export function maximaToTex(expr) {
+/** 式の木の中の変数（sym）を、defs（名前 → {expr, fn}）にある定義の値に置き換える。関数定義は対象外 */
+function inlineVars(node, defs, seen = new Set()) {
+  if (Array.isArray(node)) return node.map((x) => inlineVars(x, defs, seen))
+  if (!node || typeof node !== 'object') return node
+  if (node.type === 'sym' && defs.has(node.v) && !defs.get(node.v).fn && !seen.has(node.v)) {
+    try { return { type: 'paren', x: inlineVars(parse(defs.get(node.v).expr), defs, new Set(seen).add(node.v)) } } catch { return node }
+  }
+  return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, inlineVars(v, defs, seen)]))
+}
+
+/** 式の木の中の、解答欄の変数（ans1 など）を、表示用の文字列（「学生の解答」など）に置き換える */
+function relabelStudent(node, label) {
+  if (Array.isArray(node)) return node.map((x) => relabelStudent(x, label))
+  if (!node || typeof node !== 'object') return node
+  if (node.type === 'sym') { const t = label(node.v); return t ? { type: 'str', v: t } : node }
+  return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, relabelStudent(v, label)]))
+}
+
+/**
+ * defs を渡すと、式に出てくる変数（ta, ans2 など）を定義の値に置き換えて表示する。
+ * opts.student(name) が文字列を返す名前（解答欄 ans1 など）は、その文字列（「学生の解答」）で表示する。
+ */
+export function maximaToTex(expr, defs = null, opts = {}) {
   const src = String(expr ?? '').trim()
   if (!src) return null
-  try { return tex(parse(src)) } catch { return null }
+  try {
+    let ast = parse(src)
+    if (defs && defs.size) ast = inlineVars(ast, defs)
+    if (opts.student) ast = relabelStudent(ast, opts.student)
+    return tex(ast)
+  } catch { return null }
+}
+
+// ---- 加工の手順 -------------------------------------------------------------
+// ratcoef(expand(ratsimp(subst([C=0,c=0], ans1)/exp(-x))), x, 2) のような入れ子を、
+// 「内側から外側へ」順に並べた手順（日本語＋必要なら数式）にする。対応できない形は null。
+const hasStudent = (n, isStudent) => {
+  if (Array.isArray(n)) return n.some((x) => hasStudent(x, isStudent))
+  if (!n || typeof n !== 'object') return false
+  if (n.type === 'sym') return !!isStudent(n.v)
+  return Object.values(n).some((v) => hasStudent(v, isStudent))
+}
+const WRAP_STEP = {
+  ratsimp: '簡約する', fullratsimp: '簡約する',
+  radcan: '根号・べき乗をまとめる', trigsimp: '三角関数の式を簡単にする',
+  expand: '展開する', factor: '因数分解する', num: '分子を取り出す', denom: '分母を取り出す',
+}
+function stepsOf(node, isStudent) {
+  const n = strip(node)
+  if (n.type === 'sym') return isStudent(n.v) ? [] : null
+  if (n.type === 'call') {
+    const a = n.args.map(strip)
+    const inner = (x) => stepsOf(x, isStudent)
+    const then = (x, step) => { const r = inner(x); return r && [...r, step] }
+    if (WRAP_STEP[n.name] && a.length === 1) return then(a[0], { text: WRAP_STEP[n.name] })
+    if (n.name === 'diff' && a.length === 2) return then(a[0], { tex: tex(a[1]), text: ' で微分する' })
+    if (n.name === 'hipow' && a.length === 2) return then(a[0], { tex: tex(a[1]), text: ' についての最高次数を求める' })
+    if ((n.name === 'ratcoef' || n.name === 'coeff') && (a.length === 2 || a.length === 3))
+      return then(a[0], { tex: a.length === 3 ? `${tex(a[1])}^{${tex(a[2])}}` : tex(a[1]), text: ' の係数を取り出す' })
+    if (n.name === 'subst' && a.length === 2 && a[0].type === 'list' && a[0].items.every((i) => strip(i).type === 'rel' && strip(i).op === '=')) {
+      const rels = a[0].items.map(strip)
+      const consts = rels.every((r) => ['C', 'c'].includes(strip(r.l).v) && strip(r.r).v === '0')
+      return then(a[1], consts ? { text: `積分定数 ${rels.map((r) => strip(r.l).v).join(', ')} を 0 とおく` } : { tex: rels.map((r) => tex(r)).join(',\\ '), text: ' を代入する' })
+    }
+    return null
+  }
+  if (n.type === 'bin' && ['/', '*', '+', '-'].includes(n.op)) {
+    const ls = hasStudent(n.l, isStudent)
+    const rs = hasStudent(n.r, isStudent)
+    const VERB = { '/': ' で割る', '*': ' を掛ける', '+': ' を足す', '-': ' を引く' }
+    if (ls && !rs) { const r = stepsOf(n.l, isStudent); return r && [...r, { tex: tex(strip(n.r)), text: VERB[n.op] }] }
+    if (!ls && rs && (n.op === '*' || n.op === '+')) { const r = stepsOf(n.r, isStudent); return r && [...r, { tex: tex(strip(n.l)), text: VERB[n.op] }] }
+  }
+  return null
+}
+
+/** 加工の手順（[{ tex?, text }, …]）。手順にできない式は null。opts は maximaToTex と同じ */
+export function explainSteps(expr, defs = null, opts = {}) {
+  const src = String(expr ?? '').trim()
+  if (!src || !opts.student) return null
+  try {
+    let ast = parse(src)
+    if (defs && defs.size) ast = inlineVars(ast, defs)
+    const r = stepsOf(ast, (v) => opts.student(v))
+    return r && r.length ? r : null
+  } catch { return null }
+}
+
+// ---- 「〜を含む／含まない」の条件 ---------------------------------------------
+// freeof(a, e) / not freeof(a, e) とその and / or を、日本語の文にするための構造にする
+const WHAT_NAMES = {
+  log: 'log（対数）', ln: 'ln（対数）', abs: '絶対値 | |', exp: 'exp（指数関数）',
+  sin: 'sin', cos: 'cos', tan: 'tan', sqrt: '√（根号）', atan: 'arctan', arctan: 'arctan',
+}
+function containsClause(n, opts) {
+  n = strip(n)
+  let has = false
+  if (n.type === 'not') {
+    const x = strip(n.x)
+    n = x.type === 'call' && x.name === 'is' ? strip(x.args[0]) : x
+    has = true
+  }
+  if (n.type !== 'call' || n.name !== 'freeof' || n.args.length !== 2) return null
+  const [a, e] = n.args.map(strip)
+  let subject
+  const asStudent = (x) => x.type === 'sym' && opts.student(x.v)
+  if (asStudent(e)) subject = { kind: 'student' }
+  else if (e.type === 'call' && e.name === 'subst' && e.args.length === 2 && asStudent(strip(e.args[1])) && strip(e.args[0]).type === 'list') {
+    const rels = strip(e.args[0]).items.map(strip)
+    const consts = rels.every((r) => r.type === 'rel' && r.op === '=' && ['C', 'c'].includes(strip(r.l).v) && strip(r.r).v === '0')
+    subject = { kind: 'student', note: consts ? `積分定数 ${rels.map((r) => strip(r.l).v).join(', ')} を 0 とおいたもの` : `${rels.map((r) => tex(r)).join(', ')} を代入したもの`, noteIsTex: !consts }
+  } else subject = { kind: 'expr', tex: tex(relabelStudent(e, opts.student)) }
+  const what = a.type === 'sym' && WHAT_NAMES[a.v] ? { text: WHAT_NAMES[a.v] } : { tex: tex(a) }
+  return { subject, what, has } // has: 含まれている（true）／含まれていない（false）
+}
+
+/** 条件を { join: 'and'|'or'|null, clauses: [...] } にする。対応できない形は null */
+export function explainContains(expr, defs = null, opts = {}) {
+  const src = String(expr ?? '').trim()
+  if (!src || !opts.student) return null
+  try {
+    let ast = parse(src)
+    if (defs && defs.size) ast = inlineVars(ast, defs)
+    ast = strip(ast)
+    if (ast.type === 'call' && ast.name === 'is' && ast.args.length === 1) ast = strip(ast.args[0])
+    const flat = (n, op) => { n = strip(n); return n.type === op ? [...flat(n.l, op), ...flat(n.r, op)] : [n] }
+    const op = ast.type === 'and' || ast.type === 'or' ? ast.type : null
+    const parts = op ? flat(ast, op) : [ast]
+    const clauses = parts.map((p) => containsClause(p, opts))
+    return clauses.every(Boolean) ? { join: op, clauses } : null
+  } catch { return null }
 }
 
 /**

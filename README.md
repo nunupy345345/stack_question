@@ -66,6 +66,23 @@ npm run prepare-survey -- --input json/survey_16.json --require human \
 - `--tracks traditional,norag,human` のように、使うトラックを限定することもできます。
 - 人間版は scoremode（`=` / `+`）・変数名（`wa1` 等）・description の書き方を既存トラックに揃えて作ると、書き方の癖から作成者を推測されにくくなります。
 
+## 評価する問題の絞り込みと模範解答
+
+- `--keys 82-0,85-0,...` で、使う問題（`<job_id>-<problem_index>`）を限定できます。
+- `data/model_answers.json`（問題キー → 模範解答の TeX）があると、各問題に `correct_answer_tex` として入り、問題カードに **正答** として表示されます。この問題では、PRT の「正答判定ノード（ノード1）」のカードは出さず、左の木にだけ表示します。模範解答が無い問題は、従来どおりノード1のカードを表示します。
+- 現在は、微分3問（82-0, 85-0, 87-0）と積分3問（89-0, 92-0, 93-0）の6問です。
+
+```bash
+npm run prepare-survey -- --input json/survey_16.json --require human \
+  --keys 82-0,85-0,87-0,89-0,92-0,93-0 \
+  --raters r01-ca8870,r02-c5cb26,r03-c0bfb8,r04-88edcc,r05-78f691,r06-3daf54 --overlap 6 --block 6
+```
+
+## 設問
+
+- 誤答診断ノードごと: **C1**（フィードバックは数学的に正しいか: はい／いいえ／フィードバックなし）、**C2**（誤りの理由を的確に特定できているか: 4件法。C1 が「フィードバックなし」なら回答不要）
+- PRT 全体: **D1**（採点ロジックの妥当性・5件法）、**D2**（典型的な誤りのカバー・5件法）、**D3**（人間か AI かの推測と理由）、**D4**（自由記述）
+
 ## 問題文
 
 評価者に見せる問題文は、各問題（item）の `stack_question_text`（3トラック共通）です。無い場合のみ `source_question_text` で代用し、前処理時に警告を出します。
@@ -94,7 +111,7 @@ SELECT feedbackvariables FROM mdl_qtype_stack_prts    WHERE questionid = :qid AN
 定義の式は [src/lib/maxima2tex.js](src/lib/maxima2tex.js) で LaTeX に変換し、KaTeX で数式として表示します（約300行・依存なし）。
 
 - 対応: 四則・`^`・`sqrt`・`abs`・`exp`・`log`・三角/逆三角/双曲線関数・`diff`・`integrate`/`int`・`limit`・`subst`（`subst([C=0,c=0], e)` の同時置換を含む）・`freeof`・`is`・`equal`・`and/or/not`・関係演算子（`#` は ≠）・リスト・`%pi` `inf` など。
-- STACK 特有の関数は日本語の演算名で表示します: `ratsimp`/`radcan`/`trigsimp` → 整理、`expand` → 展開、`factor` → 因数分解、`num` → 分子、`denom` → 分母、`hipow(e,x)` → deg_x(e)、`ratcoef(e,x,n)` → 係数_{xⁿ}(e)。
+- STACK 特有の関数は日本語の演算名で表示します: `ratsimp` → 簡約、`radcan` → 根号の簡約、`trigsimp` → 三角関数の簡約、`expand` → 展開、`factor` → 因数分解、`num` → 分子、`denom` → 分母、`hipow(e,x)` → deg_x(e)、`ratcoef(e,x,n)` → 係数_{xⁿ}(e)。式に出てきた関数は、判定の説明の下に「用語: 簡約 … 有理式を通分して約分した形に直す」のように意味も表示します。
 - 上記以外の関数は `\operatorname{名前}(…)` で表示します。
 - 問題変数・feedbackvariables は、`;` / `$` に加えて**改行も文の区切り**として解析します（STACK と同じ。人間が書いた PRT は `;` を付けないことが多いため）。
 - 述語関数（`wa1_pred(ex) := is(...)`）は `⇔` で表示します。
@@ -106,7 +123,7 @@ SELECT feedbackvariables FROM mdl_qtype_stack_prts    WHERE questionid = :qid AN
 ## フィードバックの位置（true側 / false側）
 
 トラックによって、診断フィードバックを置く分岐が違います（traditional / norag / 人間版は true 側、chain 型の KC 版は false 側）。
-設問 C2〜C4 は「そのノードにあるフィードバック」を対象にし、画面には `（true側）` / `（false側）` と表示します。
+設問 C1・C2 は「そのノードにあるフィードバック」を対象にし、画面には `（true側）` / `（false側）` と表示します。
 両方の分岐に無い場合のみ「フィードバックなし」になります。
 
 また、判定式が条件式（`is(...)` など）で TAns が `true` / `false` のノードは、「条件が成り立つか / 成り立たないか」という文で説明します。
@@ -115,7 +132,7 @@ SELECT feedbackvariables FROM mdl_qtype_stack_prts    WHERE questionid = :qid AN
 
 - トラック名→ラベルの対応は **ビルド前の前処理で生成** します。ブラウザでロード時に生成すると、実トラック名をクライアントに送る必要があり DevTools から見えてしまうためです。
 - 公開ファイルから `question_id`（トラックごとに番号帯が違う）と `preview_url` も削除しています。
-- 対応は問題ごとに crypto 乱数で決めます。トラックの組み合わせごとに全順列（3つなら6通り、4つなら24通り）を均等回数ずつ割り当てるので、各トラックが各ラベル位置にほぼ同数ずつ現れます。
+- 対応は問題ごとに crypto 乱数で決めます。トラック数 n ごとに「ラテン方陣」（ランダムな順列とその巡回シフト n 通り）を使うので、n 問ごとに各トラックが各ラベル位置にちょうど1回ずつ現れます（問題数が少なくても偏りにくい）。
 - 回答には `mapping_id` と `PRT-A/B/C` のみが記録され、復号は研究者のローカルでのみ行います。
 - **書き方の癖による推測**: 作成方法は名前を隠しても、データの癖で見分けられることがあります。公開前に次を確認してください。
   - scoremode（`=` / `+` / `-`）の使い方、`description` の有無、true/false どちらにフィードバックがあるか
@@ -149,7 +166,7 @@ SELECT feedbackvariables FROM mdl_qtype_stack_prts    WHERE questionid = :qid AN
 npm run decode -- responses/sheet.csv responses/*.json --out out/
 ```
 
-- `out/nodes.csv`：誤答診断ノード単位（C1〜C4、元のスコア、実トラック名）
+- `out/nodes.csv`：誤答診断ノード単位（C1・C2、元のスコア、実トラック名）
 - `out/prts.csv`：PRT単位（D1〜D4、実トラック名）
 - 同じ（評価者, 問題）の回答が複数ある場合は `updated_at` が最新のものを採用します。
 - `out/` には実トラック名が入るため gitignore 済みです。

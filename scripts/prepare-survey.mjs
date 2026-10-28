@@ -15,6 +15,8 @@
  *                                   [--overlap 2] [--block 8]
  *                                   [--tracks traditional,norag,kc,human]  使うトラックを限定（省略時は全検出）
  *                                   [--require human]  このトラックが無い問題は除外（省略時は2トラック以上あれば採用）
+ *                                   [--keys 82-0,85-0,...]  使う問題を限定（省略時は全問）
+ *                                   [--answers data/model_answers.json]  問題キー → 模範解答（TeX）。省略時は data/model_answers.json があれば使う
  *                                   [--reuse-mapping <mapping_id>]  private/ の既存の対応表をそのまま使って作り直す
  *                                       （コード修正後に同じ mapping_id・同じラベル割り当てで再生成したいとき。入力JSONが同一であることを確認する）
  */
@@ -150,12 +152,16 @@ const detected = []
 for (const item of src.items) for (const [t, tr] of Object.entries(item.tracks ?? {})) if (hasPrt(tr) && !detected.includes(t)) detected.push(t)
 const TRACKS = listArg(args.tracks) ?? detected
 const REQUIRED = listArg(args.require) ?? []
+const KEYS = listArg(args.keys)
+const answersPath = path.resolve(typeof args.answers === 'string' ? args.answers : path.join(ROOT, 'data', 'model_answers.json'))
+const MODEL_ANSWERS = fs.existsSync(answersPath) ? JSON.parse(fs.readFileSync(answersPath, 'utf8')) : {}
 if (TRACKS.length > 26) throw new Error('トラック数が多すぎます')
 
 // 各問題で使うトラックを決める
 const candidates = []
 for (const item of src.items) {
   const key = `${item.job_id}-${item.problem_index}`
+  if (KEYS && !KEYS.includes(key)) continue
   const present = TRACKS.filter((t) => hasPrt(item.tracks?.[t]))
   const lackReq = REQUIRED.filter((t) => !present.includes(t))
   if (lackReq.length) { console.warn(`skip ${key}: 必須トラック欠損 (${lackReq.join(', ')})`); continue }
@@ -169,7 +175,14 @@ const pools = {}
 for (const c of candidates) (pools[c.present.join(',')] ??= { n: c.present.length, count: 0 }).count++
 for (const pool of Object.values(pools)) {
   const perms = permutations(pool.n)
-  pool.perms = shuffle(Array.from({ length: Math.ceil(pool.count / perms.length) }, () => perms).flat())
+  // n問ごとに「ラテン方陣」（ランダムな順列とその巡回シフト）を使い、各トラックが各ラベル位置にちょうど1回ずつ現れるようにする
+  pool.perms = []
+  while (pool.perms.length < pool.count) {
+    const base = perms[crypto.randomInt(perms.length)]
+    const square = shuffle(base.map((_, k) => base.map((_, i) => base[(i + k) % pool.n])))
+    pool.perms.push(...square)
+  }
+  pool.perms = pool.perms.slice(0, pool.count).reverse() // pop() で先頭から順に使う
 }
 
 // 評価者に見せる問題文: 3トラック共通の stack_question_text。無ければ元の問題文に退避して警告する
@@ -208,6 +221,7 @@ for (const { item, key, present } of candidates) {
     job_id: item.job_id,
     problem_index: item.problem_index,
     question_text: questionText(item),
+    ...(MODEL_ANSWERS[key] ? { correct_answer_tex: MODEL_ANSWERS[key] } : {}),
     labels,
     prts,
   })
@@ -256,6 +270,8 @@ if (noStackText.length) {
 } else {
   console.log(`question   : stack_question_text を ${problems.length} 問すべてで使用`)
 }
+const noAnswer = problems.filter((p) => !p.correct_answer_tex).map((p) => p.key)
+console.log(noAnswer.length ? `警告: 模範解答が無い問題 ${noAnswer.length} 問（正答判定ノードの内容をそのまま表示します）: ${noAnswer.join(', ')}` : `answers    : 模範解答を ${problems.length} 問すべてに設定`)
 const withVars = problems.filter((p) => Object.values(p.prts).some((x) => x.questionvariables)).length
 console.log(`variables  : 問題変数あり ${withVars}/${problems.length}問${withVars ? '' : '（questionvariables が無いため ta / wa1 等の定義は表示されません）'}`)
 console.log(`public     : public/survey.json`)

@@ -11,6 +11,7 @@ import PrtTree from './PrtTree.vue'
 import PrtForm from './PrtForm.vue'
 import RichHtml from './RichHtml.vue'
 import MaxDef from './MaxDef.vue'
+import MathTex from './MathTex.vue'
 import { varContext } from '../lib/maxima.js'
 import { state, problemLabels, ensureRecord, touch, prtMissing, nodeMissing, submitRecord, hasEndpoint } from '../lib/store.js'
 
@@ -152,6 +153,10 @@ async function saveAndNext() {
           <span class="muted small">ID {{ problem.key }}</span>
         </div>
         <RichHtml :html="questionHtml" class="source-q" />
+        <div v-if="problem.correct_answer_tex" class="model-answer">
+          <span class="model-answer-label">正答</span>
+          <MathTex :tex="problem.correct_answer_tex" :fallback="problem.correct_answer_tex" />
+        </div>
       </section>
 
       <nav class="seg" role="tablist" aria-label="評価するPRT">
@@ -217,6 +222,7 @@ async function saveAndNext() {
           :answer="record.prts[label]"
           :id-prefix="idPrefix(label)"
           :highlight-node="activeLabel === label ? focusNode : ''"
+          :show-root="!problem.correct_answer_tex"
           @change="onChange"
         />
       </template>

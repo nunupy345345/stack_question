@@ -166,6 +166,9 @@ h1, h2, h3 { line-height: 1.3; }
 .q-card-label { font-size: 12px; font-weight: 700; color: var(--muted); }
 .source-q { font-size: 16px; }
 .source-q .katex { font-size: 1.3em; }
+.model-answer { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: var(--ok-bg, rgba(34,139,84,.12)); border: 1px solid var(--ok-border, rgba(34,139,84,.35)); }
+.model-answer-label { font-size: 12px; font-weight: 700; color: var(--ok, #1f7a4d); white-space: nowrap; }
+.model-answer .katex { font-size: 1.25em; }
 .stack-input { display: inline-block; border: 1px dashed var(--border); border-radius: 4px; padding: 0 8px; font-size: 12px; color: var(--muted); }
 
 .seg { display: flex; gap: 6px; flex: none; }
@@ -357,21 +360,35 @@ textarea { width: 100%; font: inherit; padding: 6px 10px; border: 1px solid var(
 .chip.student { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 700; }
 .chip.target b { font-size: 12px; color: var(--accent); }
 .judge-hint { font-size: 12px; color: var(--muted); }
+.judge-sentence.contains { display: grid; gap: 0; }
+.contains-head { font-weight: 600; }
+.contains-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 4px; }
+.contains-join { display: inline-block; min-width: 3.2em; font-weight: 700; color: var(--accent); }
+.contains-note { font-size: 12px; color: var(--muted); }
+.judge-steps { margin: 4px 0 2px; font-size: 13px; line-height: 2; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+.judge-steps-title { font-size: 12px; font-weight: 700; color: var(--muted); margin-right: 4px; }
+.judge-steps .step { display: inline-flex; align-items: baseline; gap: 4px; padding: 0 8px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); }
+.judge-steps .step b { color: var(--accent); font-weight: 700; }
+.judge-steps .step-arrow { color: var(--muted); }
+.judge-terms { margin: 2px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.judge-terms span { font-weight: 700; }
+.judge-terms b { color: var(--text, inherit); }
 .judge-tech { font-size: 11px; color: var(--muted); margin-top: 2px; word-break: break-all; }
 .judge-tech code { background: none; padding: 0; }
-.judge-defs { border-left: 2px solid var(--border); padding-left: 12px; min-width: 0; }
-.judge-defs-title { font-size: 12px; font-weight: 700; color: var(--muted); margin-bottom: 2px; }
-.judge-defs ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
-.judge-defs li { overflow-x: auto; }
+.judge-defs { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; margin-top: 2px; font-size: 11px; color: var(--muted); min-width: 0; }
+.judge-defs ul { display: contents; list-style: none; margin: 0; padding: 0; }
+.judge-defs li { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; max-width: 100%; padding: 3px 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.judge-defs li::-webkit-scrollbar { display: none; }
 .judge.compact { padding: 6px 8px; font-size: 12.5px; margin: 0 0 6px; gap: 6px; }
 .judge.compact.two { grid-template-columns: 1fr; }
 .judge.compact .judge-sentence { line-height: 1.9; }
-.judge.compact .judge-defs { border-left: none; padding-left: 0; }
 .var-scope { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
 .var-missing { margin: 4px 0 0; font-size: 12px; color: var(--warn); }
 .mathtex { font-size: 1.05em; }
+.mathtex .katex .text, .mathtex .katex .textrm { font-family: inherit; }
 .mathtex-raw { white-space: pre-wrap; word-break: break-word; }
-.judge-defs .mathtex { background: var(--surface); border-radius: 4px; padding: 1px 6px; display: inline-block; max-width: 100%; vertical-align: middle; }
+.judge-defs .mathtex { display: inline-block; max-width: 100%; vertical-align: baseline; }
+.judge-defs .katex { font-size: 1.05em; }
 .raw-code { color: var(--muted); font-size: 11px; margin-left: 6px; }
 .raw-toggle { font-size: 12px; margin-top: 6px; }
 .raw-toggle summary { cursor: pointer; color: var(--muted); }

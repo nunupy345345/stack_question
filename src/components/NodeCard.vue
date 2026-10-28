@@ -1,5 +1,5 @@
 <script setup>
-// 1ノードの詳細表示＋（誤答診断ノードなら）設問C1〜C4
+// 1ノードの詳細表示＋（誤答診断ノードなら）設問C1・C2
 import { computed } from 'vue'
 import RichHtml from './RichHtml.vue'
 import ChoiceGroup from './ChoiceGroup.vue'
@@ -28,17 +28,11 @@ const fbSide = computed(() => {
 const title = computed(() => nodeTitle(props.node))
 const missing = computed(() => (props.answer ? nodeMissing(props.answer) : []))
 
-const C3_OPTIONS = [
+const C2_OPTIONS = [
   { value: 1, label: '全く特定できていない' },
   { value: 2, label: 'あまり特定できていない' },
   { value: 3, label: 'おおむね特定できている' },
   { value: 4, label: '的確に特定できている' },
-]
-const C4_OPTIONS = [
-  { value: 1, label: '全く示していない' },
-  { value: 2, label: 'あまり示していない' },
-  { value: 3, label: 'おおむね示している' },
-  { value: 4, label: '明確に示している' },
 ]
 </script>
 
@@ -72,49 +66,19 @@ const C4_OPTIONS = [
     </div>
 
     <div v-if="answer" class="questions" @change="emit('change')" @input="emit('change')">
-      <div class="q-row">
       <div class="q">
-        <div class="q-text">
-          <b>C1.</b> このノードのスコア配分（true: <code>{{ fmtScore(node.true) }}</code> 点）に同意しますか？
-        </div>
+        <div class="q-text"><b>C1.</b> このノードのフィードバック文{{ fbSide ? `（${fbSide}）` : '' }}は数学的に正しいですか？</div>
         <ChoiceGroup
-          v-model="answer.c1_agree"
+          v-model="answer.c1"
           :name="`${idPrefix}-${node.name}-c1`"
-          :options="[{ value: 'agree', label: '同意する' }, { value: 'disagree', label: '同意しない' }]"
-        />
-        <div v-if="answer.c1_agree === 'disagree'" class="q-sub">
-          妥当だと思う点数（0〜1）：
-          <input
-            v-model.number="answer.c1_score"
-            type="number"
-            min="0"
-            max="1"
-            step="0.05"
-            class="score-input"
-            :aria-label="`ノード${node.name}の妥当な点数`"
-          />
-        </div>
-      </div>
-
-      <div class="q">
-        <div class="q-text"><b>C2.</b> このノードのフィードバック文{{ fbSide ? `（${fbSide}）` : '' }}は数学的に正しいですか？</div>
-        <ChoiceGroup
-          v-model="answer.c2"
-          :name="`${idPrefix}-${node.name}-c2`"
           :options="[{ value: 'yes', label: 'はい' }, { value: 'no', label: 'いいえ' }, { value: 'none', label: 'フィードバックなし' }]"
         />
         <div v-if="!fbSide" class="q-hint">このノードには、true側・false側ともフィードバックがありません。</div>
       </div>
-      </div>
 
-      <div class="q" :class="{ muted: answer.c2 === 'none' }">
-        <div class="q-text"><b>C3.</b> フィードバックは、この誤りの理由を的確に特定できていますか？</div>
-        <ChoiceGroup v-model="answer.c3" :name="`${idPrefix}-${node.name}-c3`" :options="C3_OPTIONS" scale :disabled="answer.c2 === 'none'" />
-      </div>
-
-      <div class="q" :class="{ muted: answer.c2 === 'none' }">
-        <div class="q-text"><b>C4.</b> フィードバックは、次に何をすべきか（feed forward）を示していますか？</div>
-        <ChoiceGroup v-model="answer.c4" :name="`${idPrefix}-${node.name}-c4`" :options="C4_OPTIONS" scale :disabled="answer.c2 === 'none'" />
+      <div class="q" :class="{ muted: answer.c1 === 'none' }">
+        <div class="q-text"><b>C2.</b> フィードバックは、この誤りの理由を的確に特定できていますか？</div>
+        <ChoiceGroup v-model="answer.c2" :name="`${idPrefix}-${node.name}-c2`" :options="C2_OPTIONS" scale :disabled="answer.c1 === 'none'" />
       </div>
     </div>
   </section>

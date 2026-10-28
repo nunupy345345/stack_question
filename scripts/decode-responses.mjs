@@ -11,7 +11,7 @@
  *   node scripts/decode-responses.mjs responses/*.json sheet.csv [--out out/]
  *
  * 出力:
- *   out/nodes.csv … 誤答診断ノード単位（C1〜C4）
+ *   out/nodes.csv … 誤答診断ノード単位（C1・C2）
  *   out/prts.csv  … PRT単位（D1〜D4）
  *   同じ (評価者, 問題) の回答が複数あれば updated_at が最新のものを採用する。
  */
@@ -117,8 +117,7 @@ for (const r of latest.values()) {
       nodeRows.push({
         ...base, node: name, description: n?.description ?? '',
         answertest: n?.answertest ?? '', true_scoremode: n?.true.scoremode ?? '', true_score: n?.true.score ?? '',
-        c1_agree: a.c1_agree, c1_score: a.c1_agree === 'disagree' ? a.c1_score : '',
-        c2: a.c2, c3: a.c2 === 'none' ? '' : a.c3, c4: a.c2 === 'none' ? '' : a.c4,
+        c1: a.c1, c2: a.c1 === 'none' ? '' : a.c2,
       })
     }
     prtRows.push({
@@ -130,7 +129,7 @@ for (const r of latest.values()) {
 }
 
 fs.mkdirSync(outDir, { recursive: true })
-const NODE_H = ['evaluator_id', 'mapping_id', 'problem_key', 'job_id', 'problem_index', 'label', 'track', 'completed', 'node', 'description', 'answertest', 'true_scoremode', 'true_score', 'c1_agree', 'c1_score', 'c2', 'c3', 'c4']
+const NODE_H = ['evaluator_id', 'mapping_id', 'problem_key', 'job_id', 'problem_index', 'label', 'track', 'completed', 'node', 'description', 'answertest', 'true_scoremode', 'true_score', 'c1', 'c2']
 const PRT_H = ['evaluator_id', 'mapping_id', 'problem_key', 'job_id', 'problem_index', 'label', 'track', 'completed', 'n_nodes', 'd1', 'd2', 'd3', 'd3_guess', 'd3_reason', 'd4', 'updated_at']
 fs.writeFileSync(path.join(outDir, 'nodes.csv'), toCsv(NODE_H, nodeRows))
 fs.writeFileSync(path.join(outDir, 'prts.csv'), toCsv(PRT_H, prtRows))

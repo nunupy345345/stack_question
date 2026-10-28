@@ -2,7 +2,7 @@ import { reactive, watch } from 'vue'
 
 const ENDPOINT = import.meta.env.VITE_SUBMIT_ENDPOINT || ''
 const TOKEN = import.meta.env.VITE_SUBMIT_TOKEN || ''
-export const CLIENT_VERSION = '1.0.0'
+export const CLIENT_VERSION = '2.0.0'
 export const hasEndpoint = !!ENDPOINT
 
 export const state = reactive({
@@ -14,7 +14,7 @@ export const state = reactive({
   loadError: '',
 })
 
-const storageKey = () => `prt-survey:v1:${state.survey.mapping_id}:${state.evaluatorId}`
+const storageKey = () => `prt-survey:v2:${state.survey.mapping_id}:${state.evaluatorId}`
 
 function safeGet(key) {
   try { return localStorage.getItem(key) } catch { return null }
@@ -81,7 +81,7 @@ export function ensureRecord(problem) {
     for (const label of problemLabels(problem)) {
       const nodes = {}
       for (const n of diagNodes(problem.prts[label].prt)) {
-        nodes[n.name] = { c1_agree: '', c1_score: null, c2: '', c3: null, c4: null }
+        nodes[n.name] = { c1: '', c2: null }
       }
       prts[label] = { nodes, d1: null, d2: null, d3: '', d3_guess: '', d3_reason: '', d4: '' }
     }
@@ -110,16 +110,10 @@ export function touch(record) {
 // ---- 入力チェック ----
 export function nodeMissing(a) {
   const m = []
-  if (!a.c1_agree) m.push('C1')
-  else if (a.c1_agree === 'disagree' && !validScore(a.c1_score)) m.push('C1（妥当な点数）')
-  if (!a.c2) m.push('C2')
-  if (a.c2 && a.c2 !== 'none') {
-    if (!a.c3) m.push('C3')
-    if (!a.c4) m.push('C4')
-  }
+  if (!a.c1) m.push('C1')
+  if (a.c1 && a.c1 !== 'none' && !a.c2) m.push('C2')
   return m
 }
-export const validScore = (v) => v !== null && v !== '' && !Number.isNaN(Number(v)) && Number(v) >= 0 && Number(v) <= 1
 
 export function prtMissing(p) {
   const m = []

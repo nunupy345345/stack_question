@@ -1,5 +1,5 @@
 <script setup>
-// 1つのPRTについて：各ノードのカード（C1〜C4）＋ PRT全体の設問 D1〜D4
+// 1つのPRTについて：各ノードのカード（C1・C2）＋ PRT全体の設問 D1〜D4
 import { computed } from 'vue'
 import NodeCard from './NodeCard.vue'
 import ChoiceGroup from './ChoiceGroup.vue'
@@ -12,6 +12,7 @@ const props = defineProps({
   answer: { type: Object, required: true }, // record.prts[label]
   idPrefix: { type: String, required: true },
   highlightNode: { type: String, default: '' },
+  showRoot: { type: Boolean, default: true }, // 模範解答を別に出す場合は、正答判定ノードのカードを省く
 })
 const emit = defineEmits(['change'])
 
@@ -33,6 +34,7 @@ const LIKERT5_VALID = [
 <template>
   <div class="prt-form">
     <NodeCard
+      v-if="showRoot"
       :node="rootNode"
       :ctx="ctx"
       :answer="null"
